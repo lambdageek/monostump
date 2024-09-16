@@ -1,14 +1,26 @@
 ﻿using Microsoft.Build.Logging.StructuredLogger;
 
-using var stream = File.OpenRead(args[0]);
 var build = BinaryLog.ReadBuild(args[0]);
 BuildAnalyzer.AnalyzeBuild(build);
-var root = build.GetRoot();
-if (root is TreeNode node)
+var scraper = new BinlogScraper(build);
+if (!scraper.Scrape())
 {
-    Console.WriteLine(node.ToString());
-    foreach (var child in node.Children)
+    Console.Error.WriteLine("Failed to scrape binlog");
+    return 1;
+}
+Console.WriteLine (scraper.Flavor);
+switch (scraper.Flavor)
+{
+    case BinlogScraper.BuildFlavor.AotCompilerTask:
     {
-        Console.WriteLine(child.ToString());
+        var aotScraper = new AotCompilerScraper(scraper.Root);
+        aotScraper.CollectAllAssets();
+        break;
+    }
+    default:
+    {
+        Console.Error.WriteLine($"Unsupported build flavor {scraper.Flavor}");
+        return 1;
     }
 }
+return 0;
