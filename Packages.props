@@ -1,0 +1,5 @@
+<Project>
+  <ItemGroup>
+    <PackageReference Update="MSBuild.StructuredLogger" Version="2.2.337" />
+  </ItemGroup>
+</Project>
