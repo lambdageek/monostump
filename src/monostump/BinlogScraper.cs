@@ -1,12 +1,15 @@
 using System;
+using Microsoft.Extensions.Logging;
 using Microsoft.Build.Logging.StructuredLogger;
 
 public class BinlogScraper
 {
     private readonly Build _build;
-    public BinlogScraper(Build build)
+    private readonly ILogger _logger;
+    public BinlogScraper(ILogger logger, Build build)
     {
         _build = build;
+        _logger = logger;
         Flavor = BuildFlavor.Unknown;
     }
 
@@ -27,8 +30,7 @@ public class BinlogScraper
     public enum BuildFlavor
     {
         Unknown = 0,
-        AotCompilerTask,
-        Android,
+        RuntimeAot,
         AppleLocal,
         AppleRemote,
     }
@@ -39,9 +41,17 @@ public class BinlogScraper
         // Something like MAUI could conceivably build for Android and Apple in the same binlog
         if (Root.FindFirstDescendant<Microsoft.Build.Logging.StructuredLogger.Task>(t => t.Name == "MonoAOTCompiler") != null)
         {
-            Flavor = BuildFlavor.AotCompilerTask;
+            _logger.LogDebug("Detected MonoAOTCompiler task");
+            Flavor = BuildFlavor.RuntimeAot;
             return;
         }
+        if (Root.FindFirstDescendant<Microsoft.Build.Logging.StructuredLogger.Task>(t => t.Name == "AOTCompile") != null)
+        {
+            _logger.LogDebug("Detected Apple AOT build");
+            Flavor = BuildFlavor.AppleLocal; // TODO: detect AppleRemote
+            return;
+        }
+        _logger.LogDebug("Unknown build flavor");
     }
 
 }

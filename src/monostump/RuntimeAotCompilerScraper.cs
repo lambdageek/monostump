@@ -1,14 +1,17 @@
 using System;
+using Microsoft.Extensions.Logging;
 using Microsoft.Build.Logging.StructuredLogger;
 
 /// <summary>
 ///  A scraper for projects that use the Mono AOT Compiler task
 /// </summary>
-public class AotCompilerScraper
+public class RuntimeAotCompilerScraper : ITaskScraper
 {
+    private readonly ILogger _logger;
     public TreeNode Root { get; }
-    public AotCompilerScraper(TreeNode root)
+    public RuntimeAotCompilerScraper(ILogger logger, TreeNode root)
     {
+        _logger = logger;
         Root = root;
     }
 
@@ -38,12 +41,36 @@ public class AotCompilerScraper
 
     private bool CollectAotTaskParams(Microsoft.Build.Logging.StructuredLogger.Task task)
     {
-        var parameters = task.FindFirstChild<Folder>(f => f.Name == "Parameters");
-        if (parameters == null)
+        foreach (var taskChild in task.Children)
         {
+            if (taskChild is Property property)
+            {
+                if (!CollectAotTaskProperty(property))
+                    return false;
+            }
+            else if (taskChild is Folder folder)
+            {
+                if (!CollectAotTaskFolder(folder))
+                    return false;
+            }
+            else if (taskChild is Message message) {
+                _logger.LogDebug ("Skipping message {Message}", message.ToString());
+            }
+            {
+                Console.Error.WriteLine ($"unexpected task child {taskChild} : {taskChild.GetType()}");
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private bool CollectAotTaskFolder (Folder folder)
+    {
+        if (folder.Name != "Parameters") {
+            Console.WriteLine ("folder: {folder.Name}");
             return false;
         }
-        foreach (var param in parameters.Children)
+        foreach (var param in folder.Children)
         {
             if (param is Property property)
             {
@@ -58,7 +85,18 @@ public class AotCompilerScraper
                     if (item is Item itemProperty)
                     {
                         Console.WriteLine ($"  {itemProperty.Name} ");
-                        Console.WriteLine ($"    TODO: metadata");
+                        foreach (var metadata in itemProperty.Children)
+                        {
+                            if (metadata is Metadata metadataProperty)
+                            {
+                                Console.WriteLine ($"    {metadataProperty.Name} = {metadataProperty.Value}");
+                            }
+                            else
+                            {
+                                Console.Error.WriteLine ($"unexpected child {metadata}");
+                                return false;
+                            }
+                        }
                     }
                     else
                     {
@@ -83,6 +121,7 @@ public class AotCompilerScraper
 
     private bool CollectAotTaskMessages(Microsoft.Build.Logging.StructuredLogger.Task task)
     {
+#if false 
         int foundExecMessage = 0;
         var messageScraper = new MonoAotCrossCommandLineScraper();
         foreach (var child in task.FindChildrenRecursive<Message>())
@@ -96,6 +135,7 @@ public class AotCompilerScraper
         }
         if (foundExecMessage == 0)
             return false;
+#endif
         return true;
     }
 
