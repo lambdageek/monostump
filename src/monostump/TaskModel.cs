@@ -118,12 +118,22 @@ public class TaskModel
     private void PopulateProperty(ILogger logger, Property property)
     {
         const string Assembly = nameof(Assembly);
+        const string CompilerBinaryPath = nameof(CompilerBinaryPath);
+        const string DedupAssembly = nameof(DedupAssembly);
         logger.LogDebug ("Property: {PropertyName} = {PropertyValue}", property.Name, property.Value);
         switch (property.Name)
         {
             case Assembly: 
                 AssetRepository.AssetPath asmPath = _assets.GetOrAddToolingAsset(property.Value, AssetRepository.AssetKind.ToolingAssembly);
                 Properties.Add(new TaskProperty { Name = property.Name, AssetValue = asmPath });
+                break;
+            case CompilerBinaryPath:
+                AssetRepository.AssetPath compilerPath = _assets.GetOrAddToolingAsset(property.Value, AssetRepository.AssetKind.ToolingBinary);
+                Properties.Add(new TaskProperty { Name = property.Name, AssetValue = compilerPath });
+                break;
+            case DedupAssembly:
+                AssetRepository.AssetPath dedupPath = _assets.GetOrAddInputAsset(property.Value, AssetRepository.AssetKind.InputAssembly);
+                Properties.Add(new TaskProperty { Name = property.Name, AssetValue = dedupPath });
                 break;
             default:
                 // TODO: handle other known properties
@@ -236,7 +246,7 @@ public class TaskModel
                 {
                     if (item.AssetValue.HasValue)
                     {
-                        sb.Append($"  <MyTask__{param.Name} Include=\"{item.AssetValue.Value}\" ");
+                        sb.Append($"  <MyTask__{param.Name} Include=\"{item.AssetValue.Value.RelativePath}\" ");
                     }
                     else
                     {
@@ -257,7 +267,7 @@ public class TaskModel
         {
             if (prop.AssetValue.HasValue)
             {
-                sb.Append($"{prop.Name}=\"{prop.AssetValue.Value}\" ");
+                sb.Append($"{prop.Name}=\"{prop.AssetValue.Value.RelativePath}\" ");
             }
             else
             {

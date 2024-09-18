@@ -105,6 +105,14 @@ public class AssetRepository
         {
             return !left.Equals(right);
         }
+
+        public string RelativePath {
+            get {
+                if (Subfolders == null)
+                    return Filename;
+                return Path.Combine(Subfolders.ToArray()) + Path.DirectorySeparatorChar + Filename;
+            }
+        }
     }
 
     public readonly struct Asset
