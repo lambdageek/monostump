@@ -215,11 +215,16 @@ public class AssetRepository
         if (Path.IsPathRooted(onDiskPath))
         {
             _logger.LogWarning("Input asset path is rooted: {OnDiskPath}", onDiskPath);
-            throw new NotImplementedException("TODO: implement absolute input paths");
+            (ImmutableList<string> subfolders, string filename) = SplitPath(onDiskPath);
+            absoluteOnDiskPath = onDiskPath;
+            return new AssetPath { Subfolders = subfolders, Filename = filename };
         }
-        (ImmutableList<string> subfolders, string filename) = SplitPath(onDiskPath);
-        absoluteOnDiskPath = Path.GetFullPath(onDiskPath, basePath: CurrentProjectBaseDir);
-        return new AssetPath { Subfolders = subfolders, Filename = filename };
+        else
+        {
+            (ImmutableList<string> subfolders, string filename) = SplitPath(onDiskPath);
+            absoluteOnDiskPath = Path.GetFullPath(onDiskPath, basePath: CurrentProjectBaseDir);
+            return new AssetPath { Subfolders = subfolders, Filename = filename };
+        }
     }
 
     public bool TryAddInputAsset(string onDiskPath, AssetKind kind, [NotNullWhen(true)] out AssetPath? outAssetPath)
