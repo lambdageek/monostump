@@ -1,6 +1,7 @@
 using System;
 using Microsoft.Extensions.Logging;
 using Microsoft.Build.Logging.StructuredLogger;
+using System.Text;
 
 /// <summary>
 ///  A scraper for projects that use the Mono AOT Compiler task
@@ -21,6 +22,16 @@ public class RuntimeAotCompilerScraper : ITaskScraper
     {
         IReadOnlyList<Microsoft.Build.Logging.StructuredLogger.Task> aotTasks = Root.FindChildrenRecursive<Microsoft.Build.Logging.StructuredLogger.Task>(t => t.Name == "MonoAOTCompiler");
 
+        if (aotTasks.Count == 0)
+        {
+            _logger.LogWarning("No MonoAOTCompiler tasks found");
+            return false;
+        }
+        if (aotTasks.Count > 1)
+        {
+            _logger.LogWarning("Multiple MonoAOTCompiler tasks found");
+            throw new NotImplementedException("TODO: multiple MonoAOTCompiler tasks");
+        }
         foreach (var t in aotTasks)
         {
             if (!CollectAotTaskAssets(t))
@@ -43,42 +54,14 @@ public class RuntimeAotCompilerScraper : ITaskScraper
 
     private bool CollectAotTaskParams(Microsoft.Build.Logging.StructuredLogger.Task task)
     {
-        Project? parentProject = task.GetNearestParent<Project>();
-        if (parentProject == null)
-        {
-            _logger.LogError("Task {Task} has no parent project", task.ToString());
-            return false;
-        }
-        _logger.LogDebug("Setting parent project to {Project}", parentProject.ProjectFile);
-        using var _ = _assets.BeginProject(parentProject.ProjectFile);
-        foreach (var taskChild in task.Children)
-        {
-            if (taskChild is Property property)
-            {
-                if (!CollectAotTaskProperty(property))
-                    return false;
-            }
-            else if (taskChild is Folder folder)
-            {
-                if (!CollectAotTaskFolder(folder))
-                    return false;
-            }
-            else if (taskChild is Message message) {
-                _logger.LogTrace ("Skipping message {Message}", message.ToString());
-            }
-            else
-            {
-                Console.Error.WriteLine ($"unexpected task child {taskChild} : {taskChild.GetType()}");
-                return false;
-            }
-        }
+        TaskModel model = TaskModel.BuildFromObjectModel(_logger, task, _assets);
         return true;
     }
 
     private bool CollectAotTaskFolder (Folder folder)
     {
         if (folder.Name != "Parameters") {
-            Console.WriteLine ("folder: {folder.Name}");
+            _logger.LogWarning ("skipping Folder: {Folder}", folder.Name);
             return false;
         }
         foreach (var param in folder.Children)
@@ -90,30 +73,43 @@ public class RuntimeAotCompilerScraper : ITaskScraper
             } 
             else if (param is Microsoft.Build.Logging.StructuredLogger.Parameter items )
             {
-                Console.WriteLine ($"Param: {items.Name}");
-                foreach (var item in items.Children)
+                StringBuilder sb = new StringBuilder();
+                if (_logger.IsEnabled(LogLevel.Debug))
                 {
-                    if (item is Item itemProperty)
+                    sb.Append ("Param: ");
+                    sb.Append (items.Name);
+                    sb.Append ("\n");
+                }
+                try {
+                    foreach (var item in items.Children)
                     {
-                        Console.WriteLine ($"  {itemProperty.Name} ");
-                        _assets.AddInputAsset(itemProperty.Name, AssetRepository.AssetKind.InputAssembly);
-                        foreach (var metadata in itemProperty.Children)
+                        if (item is Item itemProperty)
                         {
-                            if (metadata is Metadata metadataProperty)
+                            Console.WriteLine ($"  {itemProperty.Name} ");
+                            _assets.AddInputAsset(itemProperty.Name, AssetRepository.AssetKind.InputAssembly);
+                            foreach (var metadata in itemProperty.Children)
                             {
-                                Console.WriteLine ($"    {metadataProperty.Name} = {metadataProperty.Value}");
-                            }
-                            else
-                            {
-                                Console.Error.WriteLine ($"unexpected child {metadata}");
-                                return false;
+                                if (metadata is Metadata metadataProperty)
+                                {
+                                    Console.WriteLine ($"    {metadataProperty.Name} = {metadataProperty.Value}");
+                                }
+                                else
+                                {
+                                    Console.Error.WriteLine ($"unexpected child {metadata}");
+                                    return false;
+                                }
                             }
                         }
+                        else
+                        {
+                            Console.Error.WriteLine ($"unexpected child {item}");
+                            return false;
+                        }
                     }
-                    else
+                } finally {
+                    if (_logger.IsEnabled(LogLevel.Debug))
                     {
-                        Console.Error.WriteLine ($"unexpected child {item}");
-                        return false;
+                        _logger.LogDebug(sb.ToString());
                     }
                 }
             }

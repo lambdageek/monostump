@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -46,7 +47,7 @@ public class AssetRepository
         };
     }
 
-    internal readonly struct AssetPath : IEquatable<AssetPath>
+    public readonly struct AssetPath : IEquatable<AssetPath>
     {
         public ImmutableList<string> Subfolders { get; init; }
         public string Filename { get; init; }
@@ -155,12 +156,12 @@ public class AssetRepository
         return new ScopeToken { OnDispose = () => CurrentProjectBaseDir = prevProjectPath };
     }
 
-    public ScopeToken BeginAotCompilation()
+    public ScopeToken BeginAotCompilation(string taskName)
     {
         return new ScopeToken();
     }
 
-    public bool AddToolingAsset(string onDiskPath, AssetKind kind)
+    private AssetPath ToolingPathFromDiskPath(string onDiskPath, AssetKind kind)
     {
         if (!IsToolingKind(kind))
         {
@@ -173,11 +174,38 @@ public class AssetRepository
             throw new NotImplementedException("TODO: implement relative tool paths");
         }
         string filename = Path.GetFileName(onDiskPath);
-        _assets.Add(new AssetPath { Subfolders = ["tools"], Filename = filename }, new Asset { OriginalPath = onDiskPath, Kind = kind }); 
+        return new AssetPath { Subfolders = ["tools"], Filename = filename };
+    }
+    public bool TryAddToolingAsset(string onDiskPath, AssetKind kind, [NotNullWhen(true)] out AssetPath? outAssetPath)
+    {
+        AssetPath result = ToolingPathFromDiskPath(onDiskPath, kind);
+        if (!_assets.TryAdd(result, new Asset { OriginalPath = onDiskPath, Kind = kind }))
+        {
+            outAssetPath = null;
+            return false;
+        } 
+        outAssetPath = result;
         return true;
     }
 
-    public bool AddInputAsset(string onDiskPath, AssetKind kind)
+    public AssetPath GetOrAddToolingAsset(string onDiskPath, AssetKind kind)
+    {
+        AssetPath result = ToolingPathFromDiskPath(onDiskPath, kind);
+        if (_assets.TryGetValue(result, out var asset))
+        {
+            if (asset.Kind != kind)
+            {
+                _logger.LogError("Asset kind mismatch for asset {OnDiskPath}: expected {ExpectedKind}, got {ActualKind}", onDiskPath, kind, asset.Kind);
+                throw new InvalidOperationException($"Asset kind mismatch for asset {onDiskPath}");
+            }
+            return result;
+        } else {
+            _assets.Add(result, new Asset { OriginalPath = onDiskPath, Kind = kind });
+            return result;
+        }
+    }
+
+    private AssetPath InputPathFromOnDiskPath(string onDiskPath, AssetKind kind, out string absoluteOnDiskPath)
     {
         if (!IsInputKind(kind))
         {
@@ -187,12 +215,40 @@ public class AssetRepository
         if (Path.IsPathRooted(onDiskPath))
         {
             _logger.LogWarning("Input asset path is rooted: {OnDiskPath}", onDiskPath);
-            return false;
+            throw new NotImplementedException("TODO: implement absolute input paths");
         }
         (ImmutableList<string> subfolders, string filename) = SplitPath(onDiskPath);
-        string absoluteOnDiskPath = Path.GetFullPath(onDiskPath, basePath: CurrentProjectBaseDir);
-        _assets.Add(new AssetPath { Subfolders = subfolders, Filename = filename }, new Asset { OriginalPath = absoluteOnDiskPath, Kind = kind});
+        absoluteOnDiskPath = Path.GetFullPath(onDiskPath, basePath: CurrentProjectBaseDir);
+        return new AssetPath { Subfolders = subfolders, Filename = filename };
+    }
+
+    public bool TryAddInputAsset(string onDiskPath, AssetKind kind, [NotNullWhen(true)] out AssetPath? outAssetPath)
+    {
+        AssetPath result = InputPathFromOnDiskPath(onDiskPath, kind, out string absoluteOnDiskPath);
+        if (!_assets.TryAdd(result, new Asset { OriginalPath = absoluteOnDiskPath, Kind = kind}))
+        {
+            outAssetPath = null;
+            return false;
+        }
+        outAssetPath = result;
         return true;
+    }
+
+    public AssetPath GetOrAddInputAsset(string onDiskPath, AssetKind kind)
+    {
+        AssetPath result = InputPathFromOnDiskPath(onDiskPath, kind, out string absoluteOnDiskPath);
+        if (_assets.TryGetValue(result, out var asset))
+        {
+            if (asset.Kind != kind)
+            {
+                _logger.LogError("Asset kind mismatch for asset {OnDiskPath}: expected {ExpectedKind}, got {ActualKind}", onDiskPath, kind, asset.Kind);
+                throw new InvalidOperationException($"Asset kind mismatch for asset {onDiskPath}");
+            }
+            return result;
+        } else {
+            _assets.Add(result, new Asset { OriginalPath = absoluteOnDiskPath, Kind = kind });
+            return result;
+        }
     }
 
     private static (ImmutableList<string> subfolders, string filename) SplitPath(string relativePath)
