@@ -8,10 +8,12 @@ using Microsoft.Build.Logging.StructuredLogger;
 public class RuntimeAotCompilerScraper : ITaskScraper
 {
     private readonly ILogger _logger;
+    private readonly AssetRepository _assets;
     public TreeNode Root { get; }
-    public RuntimeAotCompilerScraper(ILogger logger, TreeNode root)
+    public RuntimeAotCompilerScraper(ILogger logger, AssetRepository assets, TreeNode root)
     {
         _logger = logger;
+        _assets = assets;
         Root = root;
     }
 
@@ -41,6 +43,14 @@ public class RuntimeAotCompilerScraper : ITaskScraper
 
     private bool CollectAotTaskParams(Microsoft.Build.Logging.StructuredLogger.Task task)
     {
+        Project? parentProject = task.GetNearestParent<Project>();
+        if (parentProject == null)
+        {
+            _logger.LogError("Task {Task} has no parent project", task.ToString());
+            return false;
+        }
+        _logger.LogDebug("Setting parent project to {Project}", parentProject.ProjectFile);
+        using var _ = _assets.BeginProject(parentProject.ProjectFile);
         foreach (var taskChild in task.Children)
         {
             if (taskChild is Property property)
@@ -54,8 +64,9 @@ public class RuntimeAotCompilerScraper : ITaskScraper
                     return false;
             }
             else if (taskChild is Message message) {
-                _logger.LogDebug ("Skipping message {Message}", message.ToString());
+                _logger.LogTrace ("Skipping message {Message}", message.ToString());
             }
+            else
             {
                 Console.Error.WriteLine ($"unexpected task child {taskChild} : {taskChild.GetType()}");
                 return false;
@@ -85,6 +96,7 @@ public class RuntimeAotCompilerScraper : ITaskScraper
                     if (item is Item itemProperty)
                     {
                         Console.WriteLine ($"  {itemProperty.Name} ");
+                        _assets.AddInputAsset(itemProperty.Name, AssetRepository.AssetKind.InputAssembly);
                         foreach (var metadata in itemProperty.Children)
                         {
                             if (metadata is Metadata metadataProperty)
@@ -113,9 +125,25 @@ public class RuntimeAotCompilerScraper : ITaskScraper
         return true;
     }
 
+    internal static class TaskPropertyConstants
+    {
+        public const string Assembly = nameof(Assembly);
+
+    }
+
     private bool CollectAotTaskProperty(Property property)
     {
         Console.WriteLine ($"Property: {property.Name} = {property.Value}");
+        switch (property.Name)
+        {
+            case nameof(TaskPropertyConstants.Assembly): 
+                _assets.AddToolingAsset(property.Value, AssetRepository.AssetKind.ToolingAssembly);
+                break;
+            default:
+                _logger.LogDebug("Skipping property {Property}", property.ToString());
+                break;
+
+        }
         return true;
     }
 
