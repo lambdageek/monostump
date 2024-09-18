@@ -116,6 +116,9 @@ public class BinlogScraper
     {
         _logger.LogInformation("Archiving asset repository");
         const string archivePath = "./out/replay.zip";
+        string? archiveDir = System.IO.Path.GetDirectoryName(archivePath);
+        if (archiveDir != null && !System.IO.Directory.Exists(archiveDir))
+            System.IO.Directory.CreateDirectory(archiveDir);
         _assetRepository.Archive(archivePath);
         _logger.LogInformation("Archived to {Archive}", archivePath);
     }
