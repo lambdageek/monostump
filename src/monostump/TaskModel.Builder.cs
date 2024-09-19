@@ -113,8 +113,6 @@ public partial class TaskModel
         private void PopulateProperty(Property property)
         {
             const string Assembly = nameof(Assembly);
-            const string CompilerBinaryPath = nameof(CompilerBinaryPath);
-            const string DedupAssembly = nameof(DedupAssembly);
             _logger.LogDebug("Property: {PropertyName} = {PropertyValue}", property.Name, property.Value);
             if (_callback.HandleSpecialTaskProperty(this, property))
             {
@@ -125,14 +123,6 @@ public partial class TaskModel
                 case Assembly:
                     AssetRepository.AssetPath asmPath = _assets.GetOrAddToolingAsset(property.Value, AssetRepository.AssetKind.ToolingAssembly);
                     AddTaskProperty(new () { Name = property.Name, AssetValue = asmPath });
-                    break;
-                case CompilerBinaryPath:
-                    AssetRepository.AssetPath compilerPath = _assets.GetOrAddToolingAsset(property.Value, AssetRepository.AssetKind.ToolingBinary);
-                    AddTaskProperty(new () { Name = property.Name, AssetValue = compilerPath });
-                    break;
-                case DedupAssembly:
-                    AssetRepository.AssetPath dedupPath = _assets.GetOrAddInputAsset(property.Value, AssetRepository.AssetKind.InputAssembly);
-                    AddTaskProperty(new () { Name = property.Name, AssetValue = dedupPath });
                     break;
                 default:
                     // TODO: handle other known properties

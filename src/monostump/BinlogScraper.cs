@@ -4,6 +4,8 @@ using Microsoft.Build.Logging.StructuredLogger;
 
 public class BinlogScraper
 {
+    private const string ReplayOutputPath = nameof(ReplayOutputPath);
+    public const string ReplayOutputPathProperty = $"$({ReplayOutputPath})";
     private readonly ILogger _logger;
     private readonly AssetRepository _assetRepository;
     public BinlogScraper(ILogger logger)
@@ -30,13 +32,13 @@ public class BinlogScraper
 
         switch (Flavor)
         {
-            case BinlogScraper.BuildFlavor.RuntimeAot:
+            case BuildFlavor.RuntimeAot:
             {
                 var aotScraper = new RuntimeAotCompilerScraper(_logger, _assetRepository, build);
                 aotScraper.CollectAllAssets();
                 break;
             }
-            case BinlogScraper.BuildFlavor.AppleLocal:
+            case BuildFlavor.AppleLocal:
             {
                 var appleScraper = new MaciosCompilerScraper(_logger);
                 appleScraper.CollectAllAssets();
@@ -48,6 +50,8 @@ public class BinlogScraper
                 return false;
             }
         }
+        _assetRepository.Freeze();
+        _assetRepository.CreateGeneratedAssets();
         DumpAssetRepo();
         ArchiveAssetRepo();
         return true;

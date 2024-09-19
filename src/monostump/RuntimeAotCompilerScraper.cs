@@ -50,13 +50,30 @@ public class RuntimeAotCompilerScraper : ITaskScraper, TaskModel.IBuilderCallbac
         {
             return false;
         }
-        CreateGeneratedAssets(builder.Model);
+        CollectGeneratedAssets(builder.Model);
         return true;
     }
 
-    private void CreateGeneratedAssets(TaskModel model)
+    private void CollectGeneratedAssets(TaskModel model)
     {
-        // TODO: generate a .csproj that calls the task
+        AssetRepository.AssetPath replayProject = _assets.GetOrAddGeneratedAsset(AssetRepository.GeneratedProjectName, AssetRepository.AssetKind.GeneratedProject, out var generatedAsset);
+        // FIXME: this is a hack - we should have a project model for the replay project
+        generatedAsset.FragmentGenerators.Add((sb) => sb.AppendLine($$"""
+            <Project DefaultTargets="Replay">
+            <Target Name="Replay" >
+              <Error Text="ReplayOutputPath not set" Condition="'{{BinlogScraper.ReplayOutputPathProperty}}' == ''" />
+              <ItemGroup>
+                <ReplayEnsureOutputExists Include="{{BinlogScraper.ReplayOutputPathProperty}}\aot-in" />
+                <ReplayEnsureOutputExists Include="{{BinlogScraper.ReplayOutputPathProperty}}\aot-output" />
+                <ReplayEnsureOutputExists Include="{{BinlogScraper.ReplayOutputPathProperty}}\aot-cache" />
+                <ReplayEnsureOutputExists Include="{{BinlogScraper.ReplayOutputPathProperty}}\aot-tokens" />
+              </ItemGroup>
+              <MakeDir Directories="@(ReplayEnsureOutputExists)" />
+            </Target>
+            """));
+
+        generatedAsset.FragmentGenerators.Add(model.GenerateTaskFragment);
+        generatedAsset.FragmentGenerators.Add((sb) => sb.AppendLine("</Project>"));
         return;
     }
 
@@ -67,7 +84,47 @@ public class RuntimeAotCompilerScraper : ITaskScraper, TaskModel.IBuilderCallbac
 
     bool TaskModel.IBuilderCallback.HandleSpecialTaskProperty(TaskModel.IBuilderCallbackCallback builder, Property property)
     {
-        return false;
+        const string OutputDir = nameof(OutputDir);
+        const string IntermediateOutputPath = nameof(IntermediateOutputPath);
+        const string DedupAssembly = nameof(DedupAssembly);
+        const string CompilerBinaryPath = nameof(CompilerBinaryPath);
+        const string CacheFilePath = nameof(CacheFilePath);
+        const string AotModulesTablePath = nameof(AotModulesTablePath);
+        const string TrimmingEligibleMethodsOutputDirectory = nameof(TrimmingEligibleMethodsOutputDirectory);
+        const string LLVMPath = nameof(LLVMPath);
+        switch (property.Name)
+        {
+            case OutputDir:
+                builder.AddTaskProperty(new () { Name = property.Name, StringValue = $"""{BinlogScraper.ReplayOutputPathProperty}\aot-output""" });
+                break;
+            case IntermediateOutputPath:
+                builder.AddTaskProperty(new () { Name = property.Name, StringValue = $"""{BinlogScraper.ReplayOutputPathProperty}\aot-in""" });
+                break;
+            case CacheFilePath:
+                builder.AddTaskProperty(new () { Name = property.Name, StringValue = $"""{BinlogScraper.ReplayOutputPathProperty}\aot-cache\aot_compiler_cache.json""" });
+                break;
+            case AotModulesTablePath:
+                builder.AddTaskProperty(new () { Name = property.Name, StringValue = $"""{BinlogScraper.ReplayOutputPathProperty}\aot-output\driver-gen.c""" });
+                break;
+            case TrimmingEligibleMethodsOutputDirectory:
+                builder.AddTaskProperty(new () { Name = property.Name, StringValue = $"""{BinlogScraper.ReplayOutputPathProperty}\aot-tokens""" });
+                break;
+            case DedupAssembly:
+                AssetRepository.AssetPath dedupPath = _assets.GetOrAddInputAsset(property.Value, AssetRepository.AssetKind.InputAssembly);
+                builder.AddTaskProperty(new () { Name = property.Name, AssetValue = dedupPath });
+                break;
+            case LLVMPath:
+                AssetRepository.AssetPath llvmPath = _assets.GetOrAddToolingAsset(property.Value, AssetRepository.AssetKind.ToolingUnixyBinTree);
+                builder.AddTaskProperty(new () { Name = property.Name, AssetValue = llvmPath });
+                break;
+            case CompilerBinaryPath:
+                AssetRepository.AssetPath compilerPath = _assets.GetOrAddToolingAsset(property.Value, AssetRepository.AssetKind.ToolingBinary);
+                builder.AddTaskProperty(new () { Name = property.Name, AssetValue = compilerPath });
+                break;
+            default:
+                return false;
+        }
+        return true;
     }
 
 }

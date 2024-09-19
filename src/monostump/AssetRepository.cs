@@ -1,19 +1,24 @@
 using System;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
+using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.Extensions.Logging;
 
 public class AssetRepository
 {
+    public const string GeneratedProjectName = "replay.proj";
     public enum AssetKind
     {
         InputAssembly,
         InputOther,
         ToolingAssembly,
         ToolingBinary,
-        ToolingFullFolder,
+        ToolingUnixyBinTree,
+        GeneratedProject,
         GeneratedOther,
     }
 
@@ -23,7 +28,7 @@ public class AssetRepository
         {
             AssetKind.ToolingAssembly => true,
             AssetKind.ToolingBinary => true,
-            AssetKind.ToolingFullFolder => true,
+            AssetKind.ToolingUnixyBinTree => true,
             _ => false,
         };
     }
@@ -42,6 +47,7 @@ public class AssetRepository
     {
         return kind switch
         {
+            AssetKind.GeneratedProject => true,
             AssetKind.GeneratedOther => true,
             _ => false,
         };
@@ -108,7 +114,7 @@ public class AssetRepository
 
         public string RelativePath {
             get {
-                if (Subfolders == null)
+                if (Subfolders == null || Subfolders.IsEmpty)
                     return Filename;
                 return Path.Combine(Subfolders.ToArray()) + Path.DirectorySeparatorChar + Filename;
             }
@@ -123,11 +129,22 @@ public class AssetRepository
 
     private readonly ILogger _logger;
     private readonly Dictionary<AssetPath, Asset> _assets = new Dictionary<AssetPath, Asset>();
+
+    private readonly Dictionary<AssetPath, GeneratedAsset> _generatedAssets = new Dictionary<AssetPath, GeneratedAsset>();
+
+    public class GeneratedAsset
+    {
+        public List<Action<StringBuilder>> FragmentGenerators {get;} = new List<Action<StringBuilder>>();
+    }
+
+    public bool Frozen { get; private set; }
+
     public AssetRepository(ILogger logger)
     {
         _logger = logger;
         _assets = new();
         CurrentProjectBaseDir = string.Empty;
+        Frozen = false;
     }
 
     public string CurrentProjectBaseDir { get; set; }
@@ -200,8 +217,29 @@ public class AssetRepository
         subfolders = subfolders.Insert(0, "tools");
         return new AssetPath { Subfolders = subfolders, Filename = filename };
     }
+
+    private void ThrowIfFrozen([CallerMemberName] string caller = "")
+    {
+        if (Frozen)
+        {
+            _logger.LogError("Attempt to modify asset repository after it was frozen by {Caller}", caller);
+            throw new InvalidOperationException("Asset repository is frozen");
+        }
+    }
+
+    private void ThrowIfNotFrozen([CallerMemberName] string caller = "")
+    {
+        if (!Frozen)
+        {
+            _logger.LogError("Attempt to use asset repository before it was frozen by {Caller}", caller);
+            throw new InvalidOperationException("Asset repository is not frozen");
+        }
+    }
+
     public bool TryAddToolingAsset(string onDiskPath, AssetKind kind, [NotNullWhen(true)] out AssetPath? outAssetPath)
     {
+        ThrowIfFrozen();
+        onDiskPath = Path.TrimEndingDirectorySeparator(onDiskPath);
         AssetPath result = ToolingPathFromDiskPath(onDiskPath, kind);
         if (!_assets.TryAdd(result, new Asset { OriginalPath = onDiskPath, Kind = kind }))
         {
@@ -214,6 +252,8 @@ public class AssetRepository
 
     public AssetPath GetOrAddToolingAsset(string onDiskPath, AssetKind kind)
     {
+        ThrowIfFrozen();
+        onDiskPath = Path.TrimEndingDirectorySeparator(onDiskPath);
         AssetPath result = ToolingPathFromDiskPath(onDiskPath, kind);
         if (_assets.TryGetValue(result, out var asset))
         {
@@ -255,6 +295,7 @@ public class AssetRepository
 
     public bool TryAddInputAsset(string onDiskPath, AssetKind kind, [NotNullWhen(true)] out AssetPath? outAssetPath)
     {
+        ThrowIfFrozen();
         AssetPath result = InputPathFromOnDiskPath(onDiskPath, kind, out string absoluteOnDiskPath);
         if (!_assets.TryAdd(result, new Asset { OriginalPath = absoluteOnDiskPath, Kind = kind}))
         {
@@ -267,6 +308,7 @@ public class AssetRepository
 
     public AssetPath GetOrAddInputAsset(string onDiskPath, AssetKind kind)
     {
+        ThrowIfFrozen();
         AssetPath result = InputPathFromOnDiskPath(onDiskPath, kind, out string absoluteOnDiskPath);
         if (_assets.TryGetValue(result, out var asset))
         {
@@ -280,6 +322,27 @@ public class AssetRepository
             _assets.Add(result, new Asset { OriginalPath = absoluteOnDiskPath, Kind = kind });
             return result;
         }
+    }
+
+    public void Freeze()
+    {
+        ThrowIfFrozen();
+        OptimizeStorageTree();
+        Frozen = true;
+    }
+
+    private void OptimizeStorageTree()
+    {
+        // TODO: implement me
+
+        // The idea is to find runs of folders that contain one item and collapse them
+    }
+
+    public string GetAssetRelativePath(AssetPath assetPath)
+    {
+        // TODO: return optimized path
+        ThrowIfNotFrozen();
+        return assetPath.RelativePath;
     }
 
     private static (ImmutableList<string> subfolders, string filename) SplitPath(string relativePath)
@@ -336,7 +399,14 @@ public class AssetRepository
                     current = next;
                 }
             }
-            current.Add(new AssetArchiveFile(assetPath.Filename));
+            if (IsGeneratedKind(asset.Kind))
+            {
+                current.Add(new AssetArchiveGeneratedFile(assetPath.Filename));
+            }
+            else
+            {
+                current.Add(new AssetArchiveFile(assetPath.Filename));
+            }
         }
     }
 
@@ -352,6 +422,14 @@ public class AssetRepository
             Name = name;
         }
     }
+
+    internal class AssetArchiveGeneratedFile : AssetArchiveFile
+    {
+        public AssetArchiveGeneratedFile(string name) : base(name)
+        {
+        }
+    }
+
 
     internal void Dump()
     {
@@ -390,6 +468,7 @@ public class AssetRepository
     {
         const string folderIcon = "📁 ";
         const string fileIcon = "📄 ";
+        const string gearIcon = "⚙️ ";
         foreach (var child in folder.Children)
         {
             bool newLevelIsLast = child == folder.Children.Last(); // TODO: optimize
@@ -400,6 +479,11 @@ public class AssetRepository
                 sb.Append(folderIcon);
                 sb.AppendLine(child.Name);
                 Dump(sb, childFolder, level);
+            }
+            else if (child is AssetArchiveGeneratedFile childGeneratedFile)
+            {
+                sb.Append(gearIcon);
+                sb.AppendLine(child.Name);
             }
             else if (child is AssetArchiveFile childFile)
             {
@@ -412,19 +496,126 @@ public class AssetRepository
         }
     }
 
+    public void CreateGeneratedAssets()
+    {
+        // TODO: implement me
+        // for each generated asset, create it
+        ThrowIfNotFrozen();
+    }
+
     public bool Archive(string outputPath)
     {
         using var stream = new FileStream(outputPath, FileMode.Create, FileAccess.Write);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create);
         foreach (var (assetPath, asset) in _assets)
         {
-            ImmutableList<string> entryPath = assetPath.Subfolders.Add(assetPath.Filename);
-            string entryName = string.Join(Path.DirectorySeparatorChar, entryPath);
-            ZipArchiveEntry entry = archive.CreateEntry(entryName);
-            using var entryStream = entry.Open();
-            using var fileStream = new FileStream(asset.OriginalPath, FileMode.Open, FileAccess.Read);
-            fileStream.CopyTo(entryStream);
+            if (!IsGeneratedKind(asset.Kind))
+            {
+                switch (asset.Kind)
+                {
+                    case AssetKind.InputAssembly:
+                    case AssetKind.InputOther:
+                    case AssetKind.ToolingAssembly:
+                    case AssetKind.ToolingBinary:
+                        {
+                            string entryName = GetAssetRelativePath(assetPath);
+                            ZipArchiveEntry entry = archive.CreateEntry(entryName);
+                            SetZipFileEntryMode(asset.OriginalPath, entry);
+                            using var entryStream = entry.Open();
+                            using var fileStream = new FileStream(asset.OriginalPath, FileMode.Open, FileAccess.Read);
+                            fileStream.CopyTo(entryStream);
+                        }
+                        break;
+                    case AssetKind.ToolingUnixyBinTree:
+                        AddFullUnixBinTree(asset.OriginalPath, assetPath, archive);
+                        break;
+                    default:
+                        _logger.LogError("Unhandled asset kind {Kind} for asset {AssetPath}", asset.Kind, assetPath);
+                        throw new InvalidOperationException($"Unhandled asset kind {asset.Kind}");
+                }
+            }
+            else
+            {
+                if (_generatedAssets.TryGetValue(assetPath, out var generatedAsset))
+                {
+                    StringBuilder sb = new StringBuilder();
+                    foreach (var generator in generatedAsset.FragmentGenerators)
+                    {
+                        generator(sb);
+                    }
+                    byte[] bytes = Encoding.UTF8.GetBytes(sb.ToString());
+                    string entryName = GetAssetRelativePath(assetPath);
+                    ZipArchiveEntry entry = archive.CreateEntry(entryName);
+                    using var entryStream = entry.Open();
+                    entryStream.Write(bytes, 0, bytes.Length);
+                }
+            }
+
         }
         return true;
     }
+
+    public AssetPath GetOrAddGeneratedAsset(string filename, AssetKind assetKind, out GeneratedAsset generatedAsset)
+    {
+
+        if (!IsGeneratedKind(assetKind))
+        {
+            _logger.LogError("Asset kind {Kind} for asset {Filename} is not a generated kind", assetKind, filename);
+            throw new InvalidOperationException($"Invalid asset kind {assetKind}");
+        }
+        if (assetKind == AssetKind.GeneratedProject && filename != GeneratedProjectName)
+        {
+            _logger.LogError("Generated project name mismatch: expected {ExpectedName}, got {ActualName}", GeneratedProjectName, filename);
+            throw new InvalidOperationException("Generated project name mismatch");
+        }
+        AssetPath path = new AssetPath { Subfolders = ImmutableList<string>.Empty, Filename = filename };
+        if (_generatedAssets.TryGetValue(path, out generatedAsset))
+        {
+            Debug.Assert(_assets.ContainsKey(path));
+            return path;
+        }
+        generatedAsset = new GeneratedAsset();
+        _generatedAssets.Add(path, generatedAsset);
+        _assets.Add(path, new Asset { OriginalPath = string.Empty, Kind = assetKind });
+        return path;
+    }
+
+    private void AddFullUnixBinTree(string originalPath, AssetPath assetPath, ZipArchive archive)
+    {
+        string parentDir = Path.GetDirectoryName(originalPath);
+        string binDir = Path.Combine(parentDir, "bin");
+        if (originalPath != binDir)
+        {
+            _logger.LogError("Expected bin directory at {BinDir}, got {OriginalPath}", binDir, originalPath);
+            throw new InvalidOperationException("Expected bin directory");
+        }
+        var subfolders = assetPath.Subfolders; // this is the same as the parentDir
+        if (assetPath.Filename != "bin")
+        {
+            _logger.LogError("Expected bin directory got {AssetPath}", assetPath.RelativePath);
+            throw new InvalidOperationException("Expected bin directory");  
+        }
+        string destDir = Path.Combine(subfolders.ToArray());
+        foreach (var entry in Directory.EnumerateFileSystemEntries(parentDir, "*", SearchOption.AllDirectories))
+        {
+            if (Directory.Exists(entry))
+                continue;
+            string relativePath = Path.GetRelativePath(parentDir, entry);
+            string entryName = Path.Combine(destDir, relativePath);
+            ZipArchiveEntry zipEntry = archive.CreateEntry(entryName);
+            SetZipFileEntryMode(entry, zipEntry);
+            using var zipStream = zipEntry.Open();
+            using var fileStream = new FileStream(entry, FileMode.Open, FileAccess.Read);
+            fileStream.CopyTo(zipStream);
+        }
+    }
+
+    private void SetZipFileEntryMode(string absolutePath, ZipArchiveEntry entry)
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return;
+        UnixFileMode mode = File.GetUnixFileMode(absolutePath);
+        entry.ExternalAttributes = (int)mode << 16;
+    }
+
 }
