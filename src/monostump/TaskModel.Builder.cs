@@ -92,19 +92,34 @@ public partial class TaskModel
                 _logger.LogError("Task {Task} has no Parameters folder", task.ToString());
                 throw new InvalidOperationException("Task has no Parameters folder");
             }
-            foreach (var child in parametersFolder.Children)
+            for (int passes = 0; passes < 2; passes++)
             {
-                switch (child)
+                // Have to do two passes because of DedupAssembly.
+                // It appears both as an input property and as an Assemblies item
+                // In the first pass just do all the properties and figure out what the DedupAssembly value is,
+                // then in the second pass when we see it, replace it with our preferred generated path.
+                foreach (var child in parametersFolder.Children)
                 {
-                    case Property property:
-                        PopulateProperty(property);
-                        break;
-                    case Parameter parameter:
-                        PopulateParameter(parameter);
-                        break;
-                    default:
-                        _logger.LogError("Unexpected node {Node} type {NodeType}", child.ToString(), child.GetType());
-                        throw new NotSupportedException($"Unexpected node type {child.GetType()}");
+                    switch (child)
+                    {
+                        case Property property:
+                            if (passes != 0)
+                            {
+                                continue;
+                            }
+                            PopulateProperty(property);
+                            break;
+                        case Parameter parameter:
+                            if (passes != 1)
+                            {
+                                continue;
+                            }
+                            PopulateParameter(parameter);
+                            break;
+                        default:
+                            _logger.LogError("Unexpected node {Node} type {NodeType}", child.ToString(), child.GetType());
+                            throw new NotSupportedException($"Unexpected node type {child.GetType()}");
+                    }
                 }
             }
             return true;

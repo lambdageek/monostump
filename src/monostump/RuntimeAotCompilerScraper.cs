@@ -2,6 +2,7 @@ using System;
 using Microsoft.Extensions.Logging;
 using Microsoft.Build.Logging.StructuredLogger;
 using System.Text;
+using System.Reflection.Metadata.Ecma335;
 
 /// <summary>
 ///  A scraper for projects that use the Mono AOT Compiler task
@@ -62,6 +63,9 @@ public class RuntimeAotCompilerScraper : ITaskScraper, TaskModel.IBuilderCallbac
             <Project DefaultTargets="Replay">
             <Target Name="Replay" >
               <Error Text="ReplayOutputPath not set" Condition="'{{BinlogScraper.ReplayOutputPathProperty}}' == ''" />
+              <PropertyGroup>
+                <ReplayOutputPath>$([System.IO.Path]::GetFullPath('{{BinlogScraper.ReplayOutputPathProperty}}'))</ReplayOutputPath>
+              </PropertyGroup>
               <ItemGroup>
                 <ReplayEnsureOutputExists Include="{{BinlogScraper.ReplayOutputPathProperty}}\aot-in" />
                 <ReplayEnsureOutputExists Include="{{BinlogScraper.ReplayOutputPathProperty}}\aot-output" />
@@ -79,8 +83,38 @@ public class RuntimeAotCompilerScraper : ITaskScraper, TaskModel.IBuilderCallbac
 
     bool TaskModel.IBuilderCallback.HandleSpecialTaskParameter(TaskModel.IBuilderCallbackCallback builder, Parameter parameter)
     {
-        return false;
+        const string Assemblies = nameof(Assemblies);
+        switch (parameter.Name)
+        {
+            case Assemblies:
+                HandleAssemblies(builder, parameter);
+                break;
+            default:
+                return false;
+        }
+        return true;
     }
+
+    private void HandleAssemblies(TaskModel.IBuilderCallbackCallback builder, Parameter parm)
+    {
+        AssetRepository.AssetKind assetParm = AssetRepository.AssetKind.InputAssembly;
+        List<TaskModel.TaskItem> items = new List<TaskModel.TaskItem>();
+        foreach (var child in parm.Children)
+        {
+            if (child is Item item)
+            {
+                    builder.PopulateParameterItem(item, items, assetParm);
+            }
+            else
+            {
+                _logger.LogError("Unexpected node {Node} type {NodeType}", child.ToString(), child.GetType());
+                throw new NotSupportedException($"Unexpected node type {child.GetType()}");
+            }
+        }
+        builder.AddTaskParameter(new () { Name = parm.Name, Items = items });
+    }
+
+    //private string? _dedupAssemblyPath;
 
     bool TaskModel.IBuilderCallback.HandleSpecialTaskProperty(TaskModel.IBuilderCallbackCallback builder, Property property)
     {
@@ -98,7 +132,7 @@ public class RuntimeAotCompilerScraper : ITaskScraper, TaskModel.IBuilderCallbac
                 builder.AddTaskProperty(new () { Name = property.Name, StringValue = $"""{BinlogScraper.ReplayOutputPathProperty}\aot-output""" });
                 break;
             case IntermediateOutputPath:
-                builder.AddTaskProperty(new () { Name = property.Name, StringValue = $"""{BinlogScraper.ReplayOutputPathProperty}\aot-in""" });
+                builder.AddTaskProperty(new () { Name = property.Name, StringValue = $"""{BinlogScraper.ReplayOutputPathProperty}""" });
                 break;
             case CacheFilePath:
                 builder.AddTaskProperty(new () { Name = property.Name, StringValue = $"""{BinlogScraper.ReplayOutputPathProperty}\aot-cache\aot_compiler_cache.json""" });
@@ -111,7 +145,7 @@ public class RuntimeAotCompilerScraper : ITaskScraper, TaskModel.IBuilderCallbac
                 break;
             case DedupAssembly:
                 AssetRepository.AssetPath dedupPath = _assets.GetOrAddInputAsset(property.Value, AssetRepository.AssetKind.InputAssembly);
-                builder.AddTaskProperty(new () { Name = property.Name, AssetValue = dedupPath });
+                builder.AddTaskProperty(new () { Name = property.Name, AssetValue = dedupPath});
                 break;
             case LLVMPath:
                 AssetRepository.AssetPath llvmPath = _assets.GetOrAddToolingAsset(property.Value, AssetRepository.AssetKind.ToolingUnixyBinTree);
