@@ -14,6 +14,7 @@ public class AssetRepository
     public enum AssetKind
     {
         InputAssembly,
+        InputManagedAssemblyDirectory,
         InputOther,
         ToolingAssembly,
         ToolingBinary,
@@ -38,6 +39,7 @@ public class AssetRepository
         return kind switch
         {
             AssetKind.InputAssembly => true,
+            AssetKind.InputManagedAssemblyDirectory => true,
             AssetKind.InputOther => true,
             _ => false,
         };
@@ -296,6 +298,7 @@ public class AssetRepository
     public bool TryAddInputAsset(string onDiskPath, AssetKind kind, [NotNullWhen(true)] out AssetPath? outAssetPath)
     {
         ThrowIfFrozen();
+        onDiskPath = Path.TrimEndingDirectorySeparator(onDiskPath);
         AssetPath result = InputPathFromOnDiskPath(onDiskPath, kind, out string absoluteOnDiskPath);
         if (!_assets.TryAdd(result, new Asset { OriginalPath = absoluteOnDiskPath, Kind = kind}))
         {
@@ -309,6 +312,7 @@ public class AssetRepository
     public AssetPath GetOrAddInputAsset(string onDiskPath, AssetKind kind)
     {
         ThrowIfFrozen();
+        onDiskPath = Path.TrimEndingDirectorySeparator(onDiskPath);
         AssetPath result = InputPathFromOnDiskPath(onDiskPath, kind, out string absoluteOnDiskPath);
         if (_assets.TryGetValue(result, out var asset))
         {
@@ -526,6 +530,9 @@ public class AssetRepository
                             fileStream.CopyTo(entryStream);
                         }
                         break;
+                    case AssetKind.InputManagedAssemblyDirectory:
+                        AddFullDirectory(asset.OriginalPath, assetPath, "*.dll", archive);
+                        break;
                     case AssetKind.ToolingUnixyBinTree:
                         AddFullUnixBinTree(asset.OriginalPath, assetPath, archive);
                         break;
@@ -569,9 +576,10 @@ public class AssetRepository
             throw new InvalidOperationException("Generated project name mismatch");
         }
         AssetPath path = new AssetPath { Subfolders = ImmutableList<string>.Empty, Filename = filename };
-        if (_generatedAssets.TryGetValue(path, out generatedAsset))
+        if (_generatedAssets.TryGetValue(path, out GeneratedAsset? cachedGeneratedAsset))
         {
             Debug.Assert(_assets.ContainsKey(path));
+            generatedAsset = cachedGeneratedAsset;
             return path;
         }
         generatedAsset = new GeneratedAsset();
@@ -582,7 +590,12 @@ public class AssetRepository
 
     private void AddFullUnixBinTree(string originalPath, AssetPath assetPath, ZipArchive archive)
     {
-        string parentDir = Path.GetDirectoryName(originalPath);
+        string? parentDir = Path.GetDirectoryName(originalPath);
+        if (string.IsNullOrEmpty(parentDir))
+        {
+            _logger.LogError("Failed to get parent directory for {OriginalPath}", originalPath);
+            throw new InvalidOperationException("Failed to get parent directory");
+        }
         string binDir = Path.Combine(parentDir, "bin");
         if (originalPath != binDir)
         {
@@ -601,6 +614,23 @@ public class AssetRepository
             if (Directory.Exists(entry))
                 continue;
             string relativePath = Path.GetRelativePath(parentDir, entry);
+            string entryName = Path.Combine(destDir, relativePath);
+            ZipArchiveEntry zipEntry = archive.CreateEntry(entryName);
+            SetZipFileEntryMode(entry, zipEntry);
+            using var zipStream = zipEntry.Open();
+            using var fileStream = new FileStream(entry, FileMode.Open, FileAccess.Read);
+            fileStream.CopyTo(zipStream);
+        }
+    }
+
+    private void AddFullDirectory(string originalPath, AssetPath assetPath, string glob, ZipArchive archive)
+    {
+        string destDir = GetAssetRelativePath(assetPath);
+        foreach (var entry in Directory.EnumerateFileSystemEntries(originalPath, glob, SearchOption.TopDirectoryOnly))
+        {
+            if (Directory.Exists(entry))
+                continue;
+            string relativePath = Path.GetRelativePath(originalPath, entry);
             string entryName = Path.Combine(destDir, relativePath);
             ZipArchiveEntry zipEntry = archive.CreateEntry(entryName);
             SetZipFileEntryMode(entry, zipEntry);

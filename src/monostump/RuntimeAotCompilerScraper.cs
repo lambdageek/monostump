@@ -84,10 +84,14 @@ public class RuntimeAotCompilerScraper : ITaskScraper, TaskModel.IBuilderCallbac
     bool TaskModel.IBuilderCallback.HandleSpecialTaskParameter(TaskModel.IBuilderCallbackCallback builder, Parameter parameter)
     {
         const string Assemblies = nameof(Assemblies);
+        const string AdditionalAssemblySearchPaths = nameof(AdditionalAssemblySearchPaths);
         switch (parameter.Name)
         {
             case Assemblies:
                 HandleAssemblies(builder, parameter);
+                break;
+            case AdditionalAssemblySearchPaths:
+                HandleAdditionalAssemblySearchPaths(builder, parameter);
                 break;
             default:
                 return false;
@@ -114,7 +118,24 @@ public class RuntimeAotCompilerScraper : ITaskScraper, TaskModel.IBuilderCallbac
         builder.AddTaskParameter(new () { Name = parm.Name, Items = items });
     }
 
-    //private string? _dedupAssemblyPath;
+    private void HandleAdditionalAssemblySearchPaths(TaskModel.IBuilderCallbackCallback builder, Parameter parm)
+    {
+        AssetRepository.AssetKind assetParm = AssetRepository.AssetKind.InputManagedAssemblyDirectory;
+        List<TaskModel.TaskItem> items = new List<TaskModel.TaskItem>();
+        foreach (var child in parm.Children)
+        {
+            if (child is Item item)
+            {
+                builder.PopulateParameterItem(item, items, assetParm);
+            }
+            else
+            {
+                _logger.LogError("Unexpected node {Node} type {NodeType}", child.ToString(), child.GetType());
+                throw new NotSupportedException($"Unexpected node type {child.GetType()}");
+            }
+        }
+        builder.AddTaskParameter(new () { Name = parm.Name, Items = items });
+    }
 
     bool TaskModel.IBuilderCallback.HandleSpecialTaskProperty(TaskModel.IBuilderCallbackCallback builder, Property property)
     {
