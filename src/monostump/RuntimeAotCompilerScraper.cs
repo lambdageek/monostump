@@ -6,7 +6,7 @@ using System.Text;
 /// <summary>
 ///  A scraper for projects that use the Mono AOT Compiler task
 /// </summary>
-public class RuntimeAotCompilerScraper : ITaskScraper
+public class RuntimeAotCompilerScraper : ITaskScraper, TaskModel.IBuilderCallback
 {
     private readonly ILogger _logger;
     private readonly AssetRepository _assets;
@@ -45,8 +45,12 @@ public class RuntimeAotCompilerScraper : ITaskScraper
 
     private bool CollectAotTaskAssets(Microsoft.Build.Logging.StructuredLogger.Task task)
     {
-        TaskModel model = TaskModel.BuildFromObjectModel(_logger, task, _assets);
-        CreateGeneratedAssets(model);
+        var builder = new TaskModel.Builder(_logger, _assets, this);
+        if (!builder.Create(task))
+        {
+            return false;
+        }
+        CreateGeneratedAssets(builder.Model);
         return true;
     }
 
@@ -54,6 +58,16 @@ public class RuntimeAotCompilerScraper : ITaskScraper
     {
         // TODO: generate a .csproj that calls the task
         return;
+    }
+
+    bool TaskModel.IBuilderCallback.HandleSpecialTaskParameter(TaskModel.IBuilderCallbackCallback builder, Parameter parameter)
+    {
+        return false;
+    }
+
+    bool TaskModel.IBuilderCallback.HandleSpecialTaskProperty(TaskModel.IBuilderCallbackCallback builder, Property property)
+    {
+        return false;
     }
 
 }

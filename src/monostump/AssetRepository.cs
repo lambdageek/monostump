@@ -169,6 +169,20 @@ public class AssetRepository
         return new ScopeToken();
     }
 
+
+    private string RootedPathToRelative(string onDiskPath)
+    {
+        string? root = Path.GetPathRoot(onDiskPath);
+        if (string.IsNullOrEmpty(root))
+        {
+            _logger.LogError("Failed to get root for path {OnDiskPath}", onDiskPath);
+            throw new InvalidOperationException("Failed to get root for path");
+        }
+        string relative = Path.GetRelativePath(relativeTo: root, path: onDiskPath);
+        _logger.LogDebug("Rooted asset path {OnDiskPath} stored as relative {Relative}", onDiskPath, relative);
+        return relative;
+    }
+
     private AssetPath ToolingPathFromDiskPath(string onDiskPath, AssetKind kind)
     {
         if (!IsToolingKind(kind))
@@ -181,8 +195,10 @@ public class AssetRepository
             _logger.LogError("Tooling asset path is not rooted: {OnDiskPath}", onDiskPath);
             throw new NotImplementedException("TODO: implement relative tool paths");
         }
-        string filename = Path.GetFileName(onDiskPath);
-        return new AssetPath { Subfolders = ["tools"], Filename = filename };
+        string relative = RootedPathToRelative(onDiskPath);
+        (ImmutableList<string> subfolders, string filename) = SplitPath(relative);
+        subfolders = subfolders.Insert(0, "tools");
+        return new AssetPath { Subfolders = subfolders, Filename = filename };
     }
     public bool TryAddToolingAsset(string onDiskPath, AssetKind kind, [NotNullWhen(true)] out AssetPath? outAssetPath)
     {
@@ -222,15 +238,17 @@ public class AssetRepository
         }
         if (Path.IsPathRooted(onDiskPath))
         {
-            _logger.LogWarning("Input asset path is rooted: {OnDiskPath}", onDiskPath);
-            (ImmutableList<string> subfolders, string filename) = SplitPath(onDiskPath);
+            string relative = RootedPathToRelative(onDiskPath);
+            (ImmutableList<string> subfolders, string filename) = SplitPath(relative);
             absoluteOnDiskPath = onDiskPath;
+            subfolders = subfolders.Insert(0, "input");
             return new AssetPath { Subfolders = subfolders, Filename = filename };
         }
         else
         {
             (ImmutableList<string> subfolders, string filename) = SplitPath(onDiskPath);
             absoluteOnDiskPath = Path.GetFullPath(onDiskPath, basePath: CurrentProjectBaseDir);
+            subfolders = subfolders.Insert(0, "input");
             return new AssetPath { Subfolders = subfolders, Filename = filename };
         }
     }
