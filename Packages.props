@@ -1,6 +1,6 @@
 <Project>
   <ItemGroup>
-    <PackageReference Update="MSBuild.StructuredLogger" Version="2.2.337" />
+    <PackageReference Update="MSBuild.StructuredLogger" Version="2.2.350" />
     <PackageReference Update="Microsoft.Extensions.Logging" Version="8.0.*" />
     <PackageReference Update="Microsoft.Extensions.Logging.Console" Version="8.0.*" />
     <PackageReference Update="System.Text.Json" Version="8.0.*" />

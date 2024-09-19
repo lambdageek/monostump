@@ -219,16 +219,14 @@ public partial class TaskModel
             }
             foreach (var child in outputItemsFolder.Children)
             {
-#if HAS_TASK_PARAMETER_ITEM
                 if (child is TaskParameterItem taskParameterItem)
                 {
                     _model!.OutputItems.Add(new TaskOutputItem { Name = taskParameterItem.ParameterName, IsProperty = false });
                 }
                 else
-#endif
                 if (child is AddItem addItem)
                 {
-                    string parameterName = GetParameterNameFromItemName(addItem.Name);
+                    string parameterName = addItem.Name;
                     _model!.OutputItems.Add(new TaskOutputItem { Name = parameterName, IsProperty = false });
                     _logger.LogDebug("AddItem: {ItemName} => {ParamName}", addItem.Name, parameterName);
                 }
@@ -247,18 +245,6 @@ public partial class TaskModel
                 }
             }
             return true;
-        }
-
-        private static string GetParameterNameFromItemName(string itemName)
-        {
-            // https://github.com/KirillOsenkov/MSBuildStructuredLog/issues/817
-            System.Text.RegularExpressions.Regex regex = new System.Text.RegularExpressions.Regex(@"^\s*(.*)\s+from parameter\s+(.*)\s*$");
-            System.Text.RegularExpressions.Match match = regex.Match(itemName);
-            if (match.Success)
-            {
-                return match.Groups[2].Value;
-            }
-            return itemName;
         }
 
     }

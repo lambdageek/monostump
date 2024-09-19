@@ -7,17 +7,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Firehose)' == 'true'">
-    <DefineConstants>$(DefineConstants);HAS_TASK_PARAMETER_ITEM</DefineConstants>
-  </PropertyGroup>
-
-  <ItemGroup Condition="'$(Firehose)' == 'true'">
-    <ProjectReference Include="/Users/alklig/work/live-MSBuildStructuredLog/src/StructuredLogger/StructuredLogger.csproj" />
-  </ItemGroup>
-
-
   <ItemGroup>
-    <PackageReference Include="MSBuild.StructuredLogger" Condition="'$(Firehose)' != 'true'" />
+    <PackageReference Include="MSBuild.StructuredLogger" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" />
     <PackageReference Include="System.Text.Json" />
