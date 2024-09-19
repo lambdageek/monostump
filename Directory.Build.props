@@ -3,4 +3,7 @@
         <UseArtifactsOutput>true</UseArtifactsOutput>
     </PropertyGroup>
     
+    <PropertyGroup>
+        <MyPackageVersion>0.0.1-alpha.0</MyPackageVersion>
+    </PropertyGroup>
 </Project>

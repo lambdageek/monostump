@@ -8,6 +8,14 @@
   </PropertyGroup>
 
   <PropertyGroup>
+    <PackageId>lambdageek.monostump</PackageId>
+    <Version>$(MyPackageVersion)</Version>
+    <Authors>Aleksey Kliger</Authors>
+    <Company>.NET Foundation</Company>
+
+  </PropertyGroup>
+
+  <PropertyGroup>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>monostump</ToolCommandName>
   </PropertyGroup>
