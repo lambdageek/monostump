@@ -182,4 +182,16 @@ public class RuntimeAotCompilerScraper : ITaskScraper, TaskModel.IBuilderCallbac
         return true;
     }
 
+    bool TaskModel.IBuilderCallback.HandleSpecialTaskMetadata(TaskModel.IBuilderCallbackCallback builder, Microsoft.Build.Logging.StructuredLogger.Metadata metadata, System.Collections.Generic.List<TaskModel.TaskMetadata> destMetadata)
+    {
+        if (metadata.Name == "AotArguments") {
+            var opt = metadata.Value;
+            if (opt.Contains("temp-path=") || opt.Contains("profile="))
+            {
+                throw new NotImplementedException("TODO: handle temp-path and profile options");
+            }
+        }
+        return false;
+    }
+
 }

@@ -13,6 +13,7 @@ public partial class TaskModel
     {
         bool HandleSpecialTaskProperty(IBuilderCallbackCallback builder, Property property);
         bool HandleSpecialTaskParameter(IBuilderCallbackCallback builder, Parameter parameter);
+        bool HandleSpecialTaskMetadata(IBuilderCallbackCallback builder, Metadata metadata, List<TaskMetadata> destMetadata);
     }
 
     public interface IBuilderCallbackCallback 
@@ -179,6 +180,10 @@ public partial class TaskModel
             {
                 if (metadataProperty is Metadata metadataProp)
                 {
+                    if (_callback.HandleSpecialTaskMetadata(this, metadataProp, metadata))
+                    {
+                        continue;
+                    }
                     PopulateParameterItemMetadata(metadataProp, metadata);
                 }
                 else
