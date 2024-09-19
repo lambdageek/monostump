@@ -200,19 +200,26 @@ public class TaskModel
         }
         foreach (var child in outputItemsFolder.Children)
         {
-            if (child is Property property)
+    #if HAS_TASK_PARAMETER_ITEM
+            if (child is TaskParameterItem taskParameterItem)
+            {
+                OutputItems.Add(new TaskOutputItem { Name = taskParameterItem.ParameterName, IsProperty = false });
+            }
+            else
+    #endif
+            if (child is AddItem addItem)
+            {
+                string parameterName = GetParameterNameFromItemName(addItem.Name);
+                OutputItems.Add(new TaskOutputItem { Name = parameterName, IsProperty = false });
+                logger.LogDebug("AddItem: {ItemName} => {ParamName}", addItem.Name, parameterName);
+            }
+            else if (child is Property property)
             {
                 OutputItems.Add(new TaskOutputItem { Name = property.Name, IsProperty = true });
             }
             else if (child is Item item)
             {
                 OutputItems.Add(new TaskOutputItem { Name = item.Name, IsProperty = false });
-            }
-            else if (child is AddItem addItem)
-            {
-                string parameterName = GetParameterNameFromItemName(addItem.Name);
-                OutputItems.Add(new TaskOutputItem { Name = parameterName, IsProperty = false });
-                logger.LogDebug("AddItem: {ItemName} => {ParamName}", addItem.Name, parameterName);
             }
             else
             {
