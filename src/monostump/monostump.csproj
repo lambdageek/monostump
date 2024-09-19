@@ -7,6 +7,11 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>monostump</ToolCommandName>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="MSBuild.StructuredLogger" />
     <PackageReference Include="Microsoft.Extensions.Logging" />

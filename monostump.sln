@@ -7,8 +7,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{E8E92FD2-B01
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "monostump", "src\monostump\monostump.csproj", "{C9FD4C6D-256F-4A5A-8C36-E20697974930}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StructuredLogger", "..\live-MSBuildStructuredLog\src\StructuredLogger\StructuredLogger.csproj", "{87DD5FC7-29C7-4CE9-B22B-2A4D6CB9B497}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -22,10 +20,6 @@ Global
 		{C9FD4C6D-256F-4A5A-8C36-E20697974930}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C9FD4C6D-256F-4A5A-8C36-E20697974930}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C9FD4C6D-256F-4A5A-8C36-E20697974930}.Release|Any CPU.Build.0 = Release|Any CPU
-		{87DD5FC7-29C7-4CE9-B22B-2A4D6CB9B497}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{87DD5FC7-29C7-4CE9-B22B-2A4D6CB9B497}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{87DD5FC7-29C7-4CE9-B22B-2A4D6CB9B497}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{87DD5FC7-29C7-4CE9-B22B-2A4D6CB9B497}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{C9FD4C6D-256F-4A5A-8C36-E20697974930} = {E8E92FD2-B015-4538-B999-BC13E1BEC8C7}
