@@ -13,10 +13,12 @@
     <Authors>Aleksey Kliger</Authors>
     <Company>.NET Foundation</Company>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
   </PropertyGroup>
 
   <ItemGroup>
     <None Include="$(RepoRoot)README.md" Pack="true" PackagePath="\"/>
+    <None Include="$(RepoRoot)LICENSE" Pack="true" PackagePath="\"/>
   </ItemGroup>
 
   <PropertyGroup>
