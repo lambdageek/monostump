@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging.Console;
 using System.CommandLine;
 using System.ComponentModel;
 
-
+const string defaultOutputPath = "replay.zip";
 CliRootCommand rootCommand = new () {
     Description = "Scrapes an MSBuild binlog file for Mono AOT compiler invocations and creates a replayable build.",
 };
@@ -13,11 +13,23 @@ CliArgument<string> inputfile = new CliArgument<string>("binlog") {
     Arity = ArgumentArity.ExactlyOne,
 };
 CliOption<bool> verbose = new CliOption<bool>("--verbose", "-v") {
-    Description = "Set the log level to verbose.",
+    Description = "Print verbose output",
     Arity = ArgumentArity.Zero,
 };
+CliOption<string> outputFile = new CliOption<string>("--output", "-o") {
+    Description = $"The name of the output file",
+    Arity = ArgumentArity.ExactlyOne,
+    DefaultValueFactory = (_) => defaultOutputPath,
+};
+CliOption<bool> dryRun = new CliOption<bool>("-n", "--dry-run") {
+    Description = "Don't write the output file",
+    Arity = ArgumentArity.Zero,
+};
+
 rootCommand.Add(inputfile);
 rootCommand.Add(verbose);
+rootCommand.Add(outputFile);
+rootCommand.Add(dryRun);
 rootCommand.SetAction (RunScraper);
 
 return rootCommand.Parse(args).Invoke();
@@ -35,7 +47,10 @@ int RunScraper(ParseResult opts)
 
     var logger = MakeLogger(logLevel);
 
-    if (!new BinlogScraper(logger).CollectFromFile(input))
+    var output = opts.GetValue(outputFile) ?? defaultOutputPath;
+    var noOutput = opts.GetValue(dryRun);
+
+    if (!new BinlogScraper(logger, noOutput).CollectFromFile(input, output))
         return 1;
 
     return 0;

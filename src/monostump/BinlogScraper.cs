@@ -8,14 +8,16 @@ public class BinlogScraper
     public const string ReplayOutputPathProperty = $"$({ReplayOutputPath})";
     private readonly ILogger _logger;
     private readonly AssetRepository _assetRepository;
-    public BinlogScraper(ILogger logger)
+    private readonly bool _noOutput;
+    public BinlogScraper(ILogger logger, bool noOutput)
     {
         _logger = logger;
         _assetRepository = new AssetRepository(_logger);
         Flavor = BuildFlavor.Unknown;
+        _noOutput = noOutput;
     }
 
-    public bool CollectFromFile(string binlogPath)
+    public bool CollectFromFile(string binlogPath, string outputPath)
     {
         var build = ReadBuild(binlogPath);
         if (build == null)
@@ -28,7 +30,7 @@ public class BinlogScraper
             _logger.LogError("Failed to scrape binlog");
             return false;
         }
-        _logger.LogInformation (Flavor.ToString());
+        _logger.LogInformation ("Detected AOT compiler flavor: {Flavor}", Flavor.ToString());
 
 
         switch (Flavor)
@@ -54,7 +56,13 @@ public class BinlogScraper
         _assetRepository.Freeze();
         _assetRepository.CreateGeneratedAssets();
         DumpAssetRepo();
-        ArchiveAssetRepo();
+        if (!_noOutput)
+        {
+            ArchiveAssetRepo(outputPath);
+        } else
+        {
+            _logger.LogInformation("Dry run, not writing output to {OutputPath}", outputPath);
+        }
         return true;
     }
 
@@ -117,15 +125,15 @@ public class BinlogScraper
         }
     }
 
-    private void ArchiveAssetRepo()
+    private void ArchiveAssetRepo(string archivePath)
     {
-        _logger.LogInformation("Archiving asset repository");
-        const string archivePath = "./out/replay.zip";
+        _logger.LogInformation("Archiving asset repository to {Archive}", archivePath);
+        //const string archivePath = "./out/replay.zip";
         string? archiveDir = System.IO.Path.GetDirectoryName(archivePath);
-        if (archiveDir != null && !System.IO.Directory.Exists(archiveDir))
+        if (!string.IsNullOrEmpty(archiveDir) && !System.IO.Directory.Exists(archiveDir))
             System.IO.Directory.CreateDirectory(archiveDir);
         _assetRepository.Archive(archivePath, new Progress<float>((completion) => {
-            _logger.LogInformation("Archiving {completion:f2}% ...", completion);
+            _logger.LogInformation("Archiving {completion:f2}% ...", completion*100.0f);
         }));
         _logger.LogInformation("Archived to {Archive}", archivePath);
     }

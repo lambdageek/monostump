@@ -190,6 +190,10 @@ public class RuntimeAotCompilerScraper : ITaskScraper, TaskModel.IBuilderCallbac
                     var toolPrefixIn = property.Value;
                     var toolPrefixBareName = Path.GetFileNameWithoutExtension(toolPrefixIn);
                     var toolDir = Path.GetDirectoryName(toolPrefixIn);
+                    if (toolDir == null) {
+                        _logger.LogError("ToolPrefix property has no directory: {ToolPrefix}", toolPrefixIn);
+                        throw new InvalidOperationException("ToolPrefix property has no directory");
+                    }
                     var toolDirAsset = _assets.GetOrAddToolingAsset(toolDir, AssetRepository.AssetKind.ToolingUnixyBinTree);
                     builder.AddTaskProperty(new () {Name = property.Name, SpecialValue = () => $"$(ReplayRootDir){Path.DirectorySeparatorChar}{_assets.GetAssetRelativePath(toolDirAsset)}{Path.DirectorySeparatorChar}{toolPrefixBareName}"});
                     break;

@@ -50,7 +50,9 @@ Arguments:
 Options:
   -?, -h, --help  Show help and usage information
   --version       Show version information
-  -v, --verbose   Set the log level to verbose.
+  -v, --verbose   Print verbose output
+  -o, --output    The name of the output file [default: replay.zip]
+  -n, --dry-run   Don't write the output file
 ```
 
 1. Compile your project and create a binlog.  For example, here is a .NET 8.0 blazor-wasm project:
