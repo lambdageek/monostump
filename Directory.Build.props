@@ -6,4 +6,8 @@
     <PropertyGroup>
         <MyPackageVersion>0.0.1-alpha.0</MyPackageVersion>
     </PropertyGroup>
+
+    <PropertyGroup>
+      <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
+    </PropertyGroup>
 </Project>

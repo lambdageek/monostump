@@ -20,14 +20,22 @@ with a `replay.proj` file.  The `Replay` target of the project file loads the ta
 
 **WARNING** tool isn't stable yet. no guarantees it won't delete all your files.
 
+### Install from nuget.org
+
+```console
+$ dotnet tool install -g lambdageek.monostump --prerelease
+```
+
+This will install the tool in `~/.dotnet/tools` which should be on your `PATH`. You can then run the tool as `monostump`.
+
+### Install from a local build
+
 Build and install the tool:
 
 ```console
 $ dotnet pack
 $ dotnet tool install -g lambdageek.monostump --prerelease --add-source ./artifacts/package/release
 ```
-
-This will install the tool in `~/.dotnet/tools` which should be on your `PATH`. You can then run the tool as `monostump`.
 
 ### Uninstallation
 

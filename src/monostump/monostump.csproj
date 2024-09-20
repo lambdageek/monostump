@@ -12,8 +12,12 @@
     <Version>$(MyPackageVersion)</Version>
     <Authors>Aleksey Kliger</Authors>
     <Company>.NET Foundation</Company>
-
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(RepoRoot)README.md" Pack="true" PackagePath="\"/>
+  </ItemGroup>
 
   <PropertyGroup>
     <PackAsTool>true</PackAsTool>
