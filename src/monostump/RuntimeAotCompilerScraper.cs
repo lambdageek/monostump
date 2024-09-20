@@ -61,6 +61,9 @@ public class RuntimeAotCompilerScraper : ITaskScraper, TaskModel.IBuilderCallbac
         // FIXME: this is a hack - we should have a project model for the replay project
         generatedAsset.FragmentGenerators.Add((sb) => sb.AppendLine($$"""
             <Project DefaultTargets="Replay">
+            <PropertyGroup>
+                <ReplayRootDir>$(MSBuildThisFileDirectory)</ReplayRootDir>
+            </PropertyGroup>
             <Target Name="Replay" >
               <Error Text="ReplayOutputPath not set" Condition="'{{BinlogScraper.ReplayOutputPathProperty}}' == ''" />
               <PropertyGroup>
@@ -147,6 +150,8 @@ public class RuntimeAotCompilerScraper : ITaskScraper, TaskModel.IBuilderCallbac
         const string AotModulesTablePath = nameof(AotModulesTablePath);
         const string TrimmingEligibleMethodsOutputDirectory = nameof(TrimmingEligibleMethodsOutputDirectory);
         const string LLVMPath = nameof(LLVMPath);
+        const string WorkingDirectory = nameof(WorkingDirectory);
+        const string ToolPrefix = nameof(ToolPrefix);
         switch (property.Name)
         {
             case OutputDir:
@@ -176,22 +181,121 @@ public class RuntimeAotCompilerScraper : ITaskScraper, TaskModel.IBuilderCallbac
                 AssetRepository.AssetPath compilerPath = _assets.GetOrAddToolingAsset(property.Value, AssetRepository.AssetKind.ToolingBinary);
                 builder.AddTaskProperty(new () { Name = property.Name, AssetValue = compilerPath });
                 break;
+            case WorkingDirectory:
+                // FIXME: this is a hack that happens to work for Android
+                builder.AddTaskProperty(new () { Name = property.Name, StringValue = "$(MSBuildThisProjectDirectory)"});
+                break;
+            case ToolPrefix:
+                {
+                    var toolPrefixIn = property.Value;
+                    var toolPrefixBareName = Path.GetFileNameWithoutExtension(toolPrefixIn);
+                    var toolDir = Path.GetDirectoryName(toolPrefixIn);
+                    var toolDirAsset = _assets.GetOrAddToolingAsset(toolDir, AssetRepository.AssetKind.ToolingUnixyBinTree);
+                    builder.AddTaskProperty(new () {Name = property.Name, SpecialValue = () => $"$(ReplayRootDir){Path.DirectorySeparatorChar}{_assets.GetAssetRelativePath(toolDirAsset)}{Path.DirectorySeparatorChar}{toolPrefixBareName}"});
+                    break;
+                }
             default:
                 return false;
         }
         return true;
     }
 
-    bool TaskModel.IBuilderCallback.HandleSpecialTaskMetadata(TaskModel.IBuilderCallbackCallback builder, Microsoft.Build.Logging.StructuredLogger.Metadata metadata, System.Collections.Generic.List<TaskModel.TaskMetadata> destMetadata)
+    bool TaskModel.IBuilderCallback.HandleSpecialTaskMetadata(TaskModel.IBuilderCallbackCallback builder, Metadata metadata, List<TaskModel.TaskMetadata> destMetadata)
     {
-        if (metadata.Name == "AotArguments") {
-            var opt = metadata.Value;
-            if (opt.Contains("temp-path=") || opt.Contains("profile="))
+        const string AotArguments = nameof(AotArguments);
+        if (metadata.Name == AotArguments) {
+            Item? item = metadata.Parent as Item;
+            if (item == null)
             {
-                throw new NotImplementedException("TODO: handle temp-path and profile options");
+                _logger.LogError("AotArguments metadata not attached to an Item, but to {ParentType}", metadata.Parent.GetType());
+                throw new InvalidOperationException("AotArguments metadata not attached to an Item");
             }
+            var parser = new MonoAotArgumentsParser(metadata.Value);
+            var opts = parser.Parse();
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                StringBuilder sb = new StringBuilder();
+                foreach (var opt in opts)
+                {
+                    sb.AppendLine($"<{opt}>");
+                }
+                _logger.LogDebug("Parsed AOT arguments: {AotArguments}", sb.ToString());
+            }
+            var rewritternOpts = HandleAotArguments(item.Name, opts);
+            var taskMetadata = new TaskModel.TaskMetadata() {
+                Name = "AotArguments",
+                SpecialValue = () => 
+                    StringifyRewrittenOpts(rewritternOpts),
+                };
+            destMetadata.Add(taskMetadata);
+            return true;
         }
         return false;
     }
 
+    internal readonly struct AotItemOption
+    {
+        public string Name {get; init;}
+        public string? StringValue {get; init;}
+        public AssetRepository.AssetPath? AssetValue {get; init;}
+    }
+
+    IReadOnlyList<AotItemOption> HandleAotArguments(string itemName, IReadOnlyList<string> opts)
+    {
+        if (!itemName.EndsWith(".dll"))
+        {
+            _logger.LogWarning("AOT input assembly name does not end with .dll: {ItemName}", itemName);
+        }
+        string itemBareName = Path.GetFileNameWithoutExtension(itemName);
+        List<AotItemOption> aotOpts = new List<AotItemOption>();
+        foreach (var opt in opts)
+        {
+            if (!opt.Contains("="))
+            {
+                aotOpts.Add(new AotItemOption() { Name = opt });
+                continue;
+            }
+            var parts = opt.Split('=', 2);
+            if (parts.Length != 2)
+            {
+                _logger.LogWarning("Invalid AOT option: {AotOption}", opt);
+                continue;
+            }
+            switch (parts[0]) {
+            case "temp-path":
+                // add a temp path in the replay output directory, based on the input assembly name
+                aotOpts.Add(new () { Name = parts[0], StringValue = $"""{BinlogScraper.ReplayOutputPathProperty}\aot-temp\{itemBareName}""" });
+                break;
+            case "profile":
+                aotOpts.Add(new ()  { Name = parts[0], AssetValue = _assets.GetOrAddInputAsset(parts[1], AssetRepository.AssetKind.InputOther) });
+                break;
+            default:
+                aotOpts.Add(new () { Name = parts[0], StringValue = parts[1] });
+                break;
+            }
+        }
+        return aotOpts;
+    }
+
+    string StringifyRewrittenOpts(IReadOnlyList<AotItemOption> opts)
+    {
+        StringBuilder sb = new StringBuilder();
+        foreach (var opt in opts)
+        {
+            if (opt.StringValue != null)
+            {
+                sb.Append($"{opt.Name}={opt.StringValue}");
+            }
+            else if (opt.AssetValue != null)
+            {
+                sb.Append($"{opt.Name}=$(ReplayRootDir){Path.DirectorySeparatorChar}{_assets.GetAssetRelativePath(opt.AssetValue.Value)}");
+            }
+            else
+            {
+                sb.Append(opt.Name);
+            }
+            sb.Append(',');
+        }
+        return sb.ToString();
+    }
 }

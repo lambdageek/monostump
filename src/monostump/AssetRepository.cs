@@ -114,7 +114,8 @@ public class AssetRepository
             return !left.Equals(right);
         }
 
-        public string RelativePath {
+        // callers shouldn't use this, use AssetRepository.GetAssetRelativePath instead
+        internal string RelativePath {
             get {
                 if (Subfolders == null || Subfolders.IsEmpty)
                     return Filename;
@@ -403,14 +404,7 @@ public class AssetRepository
                     current = next;
                 }
             }
-            if (IsGeneratedKind(asset.Kind))
-            {
-                current.Add(new AssetArchiveGeneratedFile(assetPath.Filename));
-            }
-            else
-            {
-                current.Add(new AssetArchiveFile(assetPath.Filename));
-            }
+            current.Add(new AssetArchiveFile(assetPath.Filename, asset.Kind));
         }
     }
 
@@ -419,23 +413,37 @@ public class AssetRepository
     {
         public bool HasChildren => false;
         public string Name { get; }
+        public AssetKind Kind { get; }
         public IEnumerable<AssetArchiveItem> Children => Enumerable.Empty<AssetArchiveItem>();
 
-        public AssetArchiveFile(string name)
+        public AssetArchiveFile(string name, AssetKind kind)
         {
             Name = name;
+            Kind = kind;
         }
     }
-
-    internal class AssetArchiveGeneratedFile : AssetArchiveFile
-    {
-        public AssetArchiveGeneratedFile(string name) : base(name)
-        {
-        }
-    }
-
 
     internal void Dump()
+    {
+        DumpGeneratedAssets();
+        DumpArchiveTree();
+    }
+
+    private void DumpGeneratedAssets()
+    {
+        foreach (var (assetPath, generatedAsset) in _generatedAssets)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.AppendLine($"Generated asset {GetAssetRelativePath(assetPath)}: ");
+            foreach (var generator in generatedAsset.FragmentGenerators)
+            {
+                generator(sb);
+            }
+            _logger.LogDebug(sb.ToString());
+        }
+    }
+
+    private void DumpArchiveTree()
     {
         AssetArchiveRoot root = new AssetArchiveRoot();
         foreach (var (assetPath, asset) in _assets)
@@ -473,6 +481,11 @@ public class AssetRepository
         const string folderIcon = "📁 ";
         const string fileIcon = "📄 ";
         const string gearIcon = "⚙️ ";
+        const string devilIcon = "👿 ";
+        const string notebookIcon = "📓 ";
+        const string binaryToolIcon = "🔨 ";
+        const string packageIcon = "📦 ";
+        const string videocasetteIcon = "📼 ";
         foreach (var child in folder.Children)
         {
             bool newLevelIsLast = child == folder.Children.Last(); // TODO: optimize
@@ -484,14 +497,21 @@ public class AssetRepository
                 sb.AppendLine(child.Name);
                 Dump(sb, childFolder, level);
             }
-            else if (child is AssetArchiveGeneratedFile childGeneratedFile)
-            {
-                sb.Append(gearIcon);
-                sb.AppendLine(child.Name);
-            }
             else if (child is AssetArchiveFile childFile)
             {
-                sb.Append (fileIcon);
+                string icon = childFile.Kind switch
+                {
+                    AssetKind.InputAssembly => fileIcon,
+                    AssetKind.InputManagedAssemblyDirectory => packageIcon,
+                    AssetKind.InputOther => notebookIcon,
+                    AssetKind.ToolingAssembly => videocasetteIcon,
+                    AssetKind.ToolingBinary => binaryToolIcon,
+                    AssetKind.ToolingUnixyBinTree => devilIcon,
+                    AssetKind.GeneratedProject => gearIcon,
+                    AssetKind.GeneratedOther => gearIcon,
+                    _ => throw new InvalidOperationException("Unexpected asset kind"),
+                };
+                sb.Append (icon);
                 sb.AppendLine(child.Name);
             } else {
                 throw new InvalidOperationException("Unexpected child type");

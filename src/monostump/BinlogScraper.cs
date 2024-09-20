@@ -30,6 +30,7 @@ public class BinlogScraper
         }
         _logger.LogInformation (Flavor.ToString());
 
+
         switch (Flavor)
         {
             case BuildFlavor.RuntimeAot:

@@ -78,10 +78,6 @@ public partial class TaskModel
             {
                 return false;
             }
-            if (_logger.IsEnabled(LogLevel.Debug))
-            {
-                _logger.LogDebug(_model.DumpModel().ToString());
-            }
             return true;
         }
 

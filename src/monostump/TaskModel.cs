@@ -2,6 +2,7 @@ using System;
 using Microsoft.Extensions.Logging;
 using Microsoft.Build.Logging.StructuredLogger;
 using System.Text;
+using System.Diagnostics;
 
 /// <summary>
 /// Reconstructed <Task/> element from a .csproj file based on
@@ -14,6 +15,7 @@ public partial class TaskModel
         public string Name {get; init; }
         public string? StringValue {get; init; }
         public AssetRepository.AssetPath? AssetValue {get; init; }
+        public Func<string>? SpecialValue {get; init; }
     }
 
     public readonly struct TaskParameter
@@ -34,6 +36,7 @@ public partial class TaskModel
         public string Name {get; init; }
         public string? StringValue {get; init; }
         public AssetRepository.AssetPath? AssetValue {get; init; }
+        public Func<string>? SpecialValue { get; init; }
     }
 
     public readonly struct TaskOutputItem
@@ -100,7 +103,20 @@ public partial class TaskModel
                     }
                     foreach (var metadata in item.Metadata)
                     {
-                        sb.AppendLine($"{pfx}    {metadata.Name}=\"{metadata.StringValue}\" ");
+                        if (metadata.AssetValue.HasValue)
+                        {
+                            sb.AppendLine($"{pfx}    {metadata.Name}=\"{metadata.AssetValue.Value.RelativePath}\" ");
+                        }
+                        else if (metadata.StringValue != null)
+                        {
+                            sb.AppendLine($"{pfx}    {metadata.Name}=\"{metadata.StringValue}\" ");
+                        }
+                        else {
+                            Debug.Assert(metadata.SpecialValue != null);
+                            var specialValue = metadata.SpecialValue();
+                            sb.AppendLine($"{pfx}    {metadata.Name}=\"{specialValue}\" ");
+                        }
+
                     }
                     sb.AppendLine($"{pfx}  />");
                 }
@@ -113,11 +129,16 @@ public partial class TaskModel
         {
             if (prop.AssetValue.HasValue)
             {
-                sb.AppendLine($"{pfx}  {prop.Name}=\"{prop.AssetValue.Value.RelativePath}\" ");
+                sb.AppendLine($"{pfx}  {prop.Name}=\"$(ReplayRootDir){Path.DirectorySeparatorChar}{_assets.GetAssetRelativePath(prop.AssetValue.Value)}\" ");
+            }
+            else if (prop.StringValue != null)
+            {
+                sb.AppendLine($"{pfx}  {prop.Name}=\"{prop.StringValue}\" ");
             }
             else
             {
-                sb.AppendLine($"{pfx}  {prop.Name}=\"{prop.StringValue}\" ");
+                Debug.Assert(prop.SpecialValue != null);
+                sb.AppendLine($"{pfx}  {prop.Name}=\"{prop.SpecialValue()}\" ");
             }
         }
         if (Parameters.Count > 0)
