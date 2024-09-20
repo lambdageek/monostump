@@ -527,12 +527,21 @@ public class AssetRepository
         ThrowIfNotFrozen();
     }
 
-    public bool Archive(string outputPath)
+    public bool Archive(string outputPath, IProgress<float>? progressReporter = null)
     {
+        DateTime lastProgressReport = DateTime.Now;
+        TimeSpan updateInterval = TimeSpan.FromMilliseconds(250);
+        int processedAssets = -1;
         using var stream = new FileStream(outputPath, FileMode.Create, FileAccess.Write);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create);
         foreach (var (assetPath, asset) in _assets)
         {
+            processedAssets++;
+            if (DateTime.Now - lastProgressReport > updateInterval)
+            {
+                progressReporter?.Report((float)processedAssets / _assets.Count);
+                lastProgressReport = DateTime.Now;
+            }
             if (!IsGeneratedKind(asset.Kind))
             {
                 switch (asset.Kind)

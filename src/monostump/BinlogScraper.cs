@@ -62,7 +62,7 @@ public class BinlogScraper
     {
         var progress = new Progress();
         progress.Updated += (update) => {
-            _logger.LogInformation("Reading Build {Ratio:f2}%", 100.0 * update.Ratio);
+            _logger.LogInformation("Reading Binlog {Ratio:f2}% ...", 100.0 * update.Ratio);
         };
         var build = BinaryLog.ReadBuild(binlogPath, progress);
         BuildAnalyzer.AnalyzeBuild(build);
@@ -124,7 +124,9 @@ public class BinlogScraper
         string? archiveDir = System.IO.Path.GetDirectoryName(archivePath);
         if (archiveDir != null && !System.IO.Directory.Exists(archiveDir))
             System.IO.Directory.CreateDirectory(archiveDir);
-        _assetRepository.Archive(archivePath);
+        _assetRepository.Archive(archivePath, new Progress<float>((completion) => {
+            _logger.LogInformation("Archiving {completion:f2}% ...", completion);
+        }));
         _logger.LogInformation("Archived to {Archive}", archivePath);
     }
 

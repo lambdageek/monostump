@@ -37,7 +37,21 @@ $ dotnet tool uninstall -g lambdageek.monostump
 
 ## Usage
 
-There are no options yet. There is a single required argument: the path to a binlog file.
+```console
+Description:
+  Scrapes an MSBuild binlog file for Mono AOT compiler invocations and creates a replayable build.
+
+Usage:
+  monostump <binlog> [options]
+
+Arguments:
+  <binlog>  The path to the binlog file to scrape.
+
+Options:
+  -?, -h, --help  Show help and usage information
+  --version       Show version information
+  -v, --verbose   Set the log level to verbose.
+```
 
 1. Compile your project and create a binlog.  For example, here is a .NET 8.0 blazor-wasm project:
 
