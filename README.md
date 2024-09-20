@@ -67,7 +67,7 @@ Options:
 2. Run the tool on the generated msbuild.binlog:
 
    ```console
-   $ monostump msbuild.binlog
+   $ monostump msbuild.binlog -o ./out/replay.zip
    ...
          Archived to ./out/replay.zip
    ```
