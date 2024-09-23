@@ -186,7 +186,7 @@ public class RuntimeAotCompilerScraper : ITaskScraper, TaskModel.IBuilderCallbac
                     _logger.LogError("CompilerBinaryPath property has no directory or name: {CompilerBinaryPath}", property.Value);
                     throw new InvalidOperationException("CompilerBinaryPath property has no directory or name");
                 }
-                AssetRepository.AssetPath compilerDirAsset = _assets.GetOrAddToolingAsset(property.Value, AssetRepository.AssetKind.ToolingDirectory);
+                AssetRepository.AssetPath compilerDirAsset = _assets.GetOrAddToolingAsset(compilerDir, AssetRepository.AssetKind.ToolingDirectory);
                 builder.AddTaskProperty(new () { Name = property.Name, SpecialValue = () => Path.Join(_assets.GetAssetRelativePath(compilerDirAsset), compilerName) });
                 break;
             case WorkingDirectory:
