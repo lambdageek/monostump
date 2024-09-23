@@ -19,6 +19,7 @@ public class AssetRepository
         ToolingAssembly,
         ToolingBinary,
         ToolingUnixyBinTree,
+        ToolingDirectory,
         GeneratedProject,
         GeneratedOther,
     }
@@ -30,6 +31,7 @@ public class AssetRepository
             AssetKind.ToolingAssembly => true,
             AssetKind.ToolingBinary => true,
             AssetKind.ToolingUnixyBinTree => true,
+            AssetKind.ToolingDirectory => true,
             _ => false,
         };
     }
@@ -484,6 +486,7 @@ public class AssetRepository
         const string devilIcon = "👿 ";
         const string notebookIcon = "📓 ";
         const string binaryToolIcon = "🔨 ";
+        const string toolboxIcon = "🧰 ";
         const string packageIcon = "📦 ";
         const string videocasetteIcon = "📼 ";
         foreach (var child in folder.Children)
@@ -506,6 +509,7 @@ public class AssetRepository
                     AssetKind.InputOther => notebookIcon,
                     AssetKind.ToolingAssembly => videocasetteIcon,
                     AssetKind.ToolingBinary => binaryToolIcon,
+                    AssetKind.ToolingDirectory => toolboxIcon,
                     AssetKind.ToolingUnixyBinTree => devilIcon,
                     AssetKind.GeneratedProject => gearIcon,
                     AssetKind.GeneratedOther => gearIcon,
@@ -558,6 +562,9 @@ public class AssetRepository
                             using var fileStream = new FileStream(asset.OriginalPath, FileMode.Open, FileAccess.Read);
                             fileStream.CopyTo(entryStream);
                         }
+                        break;
+                    case AssetKind.ToolingDirectory:
+                        AddFullDirectory(asset.OriginalPath, assetPath, "*", archive);
                         break;
                     case AssetKind.InputManagedAssemblyDirectory:
                         AddFullDirectory(asset.OriginalPath, assetPath, "*.dll", archive);

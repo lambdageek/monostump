@@ -178,8 +178,16 @@ public class RuntimeAotCompilerScraper : ITaskScraper, TaskModel.IBuilderCallbac
                 builder.AddTaskProperty(new () { Name = property.Name, AssetValue = llvmPath });
                 break;
             case CompilerBinaryPath:
-                AssetRepository.AssetPath compilerPath = _assets.GetOrAddToolingAsset(property.Value, AssetRepository.AssetKind.ToolingBinary);
-                builder.AddTaskProperty(new () { Name = property.Name, AssetValue = compilerPath });
+                string compilerPath = property.Value;
+                string? compilerName = Path.GetFileName(compilerPath);
+                string? compilerDir = Path.GetDirectoryName(compilerPath);
+                if (string.IsNullOrEmpty(compilerName) || string.IsNullOrEmpty(compilerDir))
+                {
+                    _logger.LogError("CompilerBinaryPath property has no directory or name: {CompilerBinaryPath}", property.Value);
+                    throw new InvalidOperationException("CompilerBinaryPath property has no directory or name");
+                }
+                AssetRepository.AssetPath compilerDirAsset = _assets.GetOrAddToolingAsset(compilerDir, AssetRepository.AssetKind.ToolingDirectory);
+                builder.AddTaskProperty(new () { Name = property.Name, SpecialValue = () => Path.Join(_assets.GetAssetRelativePath(compilerDirAsset), compilerName) });
                 break;
             case WorkingDirectory:
                 // FIXME: this is a hack that happens to work for Android
