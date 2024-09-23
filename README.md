@@ -4,17 +4,40 @@ A Mono AOT compiler MSBuild binlog capture and replay analyzer.
 
 ![Syndrome from The Incredibles saying "You sly dog, you got me monologuing"](media/monolog.gif)
 
-## Design
+## Supported scenarios
 
 The tool works by looking for known Mono AOT compiler invocations (in various flavors) in an MSBuild binlog.
 
-The currently supported flavors are:
+The tool currently supports binlogs produced on macOS, Linux and Windows (using the dotnet CLI or `msbuild` from the CLI, or Visual Studio 2022 or later) for the following project types in .NET 8 or later:
 
-* `MonoAOTCompiler` task from [dotnet/runtime](https://github.com/dotnet/runtime) used by the .NET `browser-wasm` and `android` workloads
-* `AOTCompile` task from [xamarin/xamarin-macios](https://github.com/xamarin/xamarin-macios) used by the .NET `ios`, `tvos` and `maccatalyst` workloads
+* browser WebAssembly
+* Android
 
-In each case rather than finding the exact `mono-aot-cross` invocation, the tool instead collects the parameters and files that serve as inputs to the AOT task and stores them in a .zip file together
+(Both of the above use the `MonoAOTCompiler` task from [dotnet/runtime](https://github.com/dotnet/runtime))
+
+Additionally support is planned for ios, tvOS and MacCatalyst binlogs (using the `AOTCompile` task  from [xamarin/xamarin-macios](https://github.com/xamarin/xamarin-macios))
+
+In all cases rather than finding the exact `mono-aot-cross` invocation, the tool instead collects the parameters and files that serve as inputs to the AOT task and stores them in a .zip file together
 with a `replay.proj` file.  The `Replay` target of the project file loads the task (also saved in the zip file) and executes it.  The project fragment uses adjusted file paths so that everything (input assemblies, toolchains, etc) comes from the zipfile contents.
+
+### Collecting binlogs from Visual Studio
+
+1. Close Visual Studio
+2. Open a "Developer PowerShell for VS 2022" (or whatever version you're using)
+3. Set the following environment variables and then run `devenv.exe:
+
+   ```console
+   $env:MSBuildDebugEngine = "1"
+   $env:MSBUILDDEBUGPATH = "C:\Temp"
+   devenv.exe
+   ```
+
+   (you can use another directory for the debug path)
+4. Clean, then build or publish your solution
+5. Find the binlog in the temp directory that corresponds to your build. Usually the binlog with the latest timestamp.
+6. Run `monostump` on that log
+
+**Note** to replay a project captured from Visual Studio, it is necessary to run `msbuild replay.proj` (not `dotnet replay.proj`) Since the captured AOT compiler task is targeted for .NET Framework, not modern .NET
 
 ## Installation
 
