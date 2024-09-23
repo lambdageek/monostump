@@ -12,8 +12,13 @@
     <Version>$(MyPackageVersion)</Version>
     <Authors>Aleksey Kliger</Authors>
     <Company>.NET Foundation</Company>
+    <Title>Monostump</Title>
+    <Description>Monostump is a CLI tool to collect Mono AOT artifacts from an MSBuild binlog and to replay it on a different machine.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/lambdageek/monostump</RepositoryUrl>
+
   </PropertyGroup>
 
   <ItemGroup>
